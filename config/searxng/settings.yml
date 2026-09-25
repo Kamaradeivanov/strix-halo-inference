@@ -1,0 +1,19 @@
+# SearXNG — métamoteur de recherche utilisé par Open WebUI pour la recherche web.
+# Modèle : l'étape 50 le copie dans $STATE_DIR/searxng/ en y injectant une clé secrète.
+# Réglages par défaut : https://github.com/searxng/searxng/blob/master/searx/settings.yml
+
+use_default_settings: true
+
+general:
+  instance_name: "strix-halo search"
+
+server:
+  secret_key: "__SECRET_KEY__"
+  limiter: false          # usage local uniquement, pas de limitation de débit
+  image_proxy: false
+
+search:
+  safe_search: 0
+  formats:
+    - html
+    - json                # requis par Open WebUI

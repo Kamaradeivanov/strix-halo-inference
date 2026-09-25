@@ -1,0 +1,9 @@
+# Modèles GGUF téléchargés par l'étape 30 dans $MODELS_DIR/<repo>/.
+# Format : <repo Hugging Face>  <motif de fichier(s)>  (les fichiers découpés -0000X-of-0000Y suivent le motif)
+# Ajouter une ligne puis : ./setup.sh 30
+
+# MoE ~3B actifs : rapide, bon généraliste, Apache 2.0 (~22 Go)
+unsloth/Qwen3.6-35B-A3B-GGUF   Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf
+
+# MoE 120B, format natif MXFP4, Apache 2.0 (~63 Go)
+ggml-org/gpt-oss-120b-GGUF     gpt-oss-120b-MXFP4*.gguf

@@ -1,0 +1,84 @@
+# llama-swap — proxy OpenAI-compatible devant llama-server (https://github.com/mostlygeek/llama-swap).
+# Utilisé directement depuis le repo par le service systemd (étape 40), rechargé à chaud à chaque modification.
+#
+# API  : http://localhost:8080/v1   (champ "model" = un id ci-dessous, ou une variante "id:variante")
+# UI   : http://localhost:8080/ui   (état des modèles, logs, activité)
+#
+# LLAMA_SERVER et MODELS_DIR sont fournis par le service (voir config.env).
+
+healthCheckTimeout: 600        # gpt-oss-120b met ~1 min à charger depuis le disque
+logLevel: info
+startPort: 10001
+includeAliasesInList: true     # les variantes (qwen3.6:code...) apparaissent dans /v1/models
+
+macros:
+  llama-server: >-
+    ${env.LLAMA_SERVER} --port ${PORT} --host 127.0.0.1
+    -ngl 99 -fa on --load-mode dio --jinja
+
+models:
+  # --- Qwen3.6-35B-A3B : MoE ~3B actifs, ~60 tok/s -------------------------------------
+  # Paramètres recommandés par Qwen (fiche du modèle). Qwen conseille >= 128k de contexte.
+  #   qwen3.6           thinking, usage général (défaut)
+  #   qwen3.6:code      thinking, code précis
+  #   qwen3.6:instruct  sans thinking (réponses directes)
+  "qwen3.6":
+    name: "Qwen3.6 35B-A3B"
+    cmd: |
+      ${llama-server}
+      --model ${env.MODELS_DIR}/unsloth/Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf
+      --ctx-size 262144 --parallel 2
+      --temp 1.0 --top-p 0.95 --top-k 20 --min-p 0.0 --presence-penalty 1.5
+    filters:
+      setParamsByID:
+        "${MODEL_ID}:code":
+          temperature: 0.6
+          presence_penalty: 0.0
+        "${MODEL_ID}:instruct":
+          temperature: 0.7
+          top_p: 0.8
+          chat_template_kwargs:
+            enable_thinking: false
+
+  # --- gpt-oss-120b : MoE 117B / 5B actifs, MXFP4, ~55 tok/s ------------------------------
+  # Paramètres recommandés par OpenAI : temperature 1.0, top_p 1.0.
+  #   gpt-oss-120b        raisonnement medium (défaut)
+  #   gpt-oss-120b:low    raisonnement low  (plus rapide)
+  #   gpt-oss-120b:high   raisonnement high (plus poussé)
+  "gpt-oss-120b":
+    name: "gpt-oss 120B"
+    cmd: |
+      ${llama-server}
+      --model ${env.MODELS_DIR}/ggml-org/gpt-oss-120b-GGUF/gpt-oss-120b-MXFP4.gguf
+      --ctx-size 262144 --parallel 2
+      --temp 1.0 --top-p 1.0
+    filters:
+      setParamsByID:
+        "${MODEL_ID}:low":
+          chat_template_kwargs:
+            reasoning_effort: low
+        "${MODEL_ID}:high":
+          chat_template_kwargs:
+            reasoning_effort: high
+
+# Les deux modèles restent chargés en permanence : pas de temps de chargement entre eux.
+# Mémoire mesurée : ~95 Gio (Qwen ~28 + gpt-oss ~67, contextes 256k inclus) sur ~111 Gio utilisables.
+# Pour un 3e modèle, réduire les --ctx-size ou ajouter "-ctk q8_0 -ctv q8_0" (cache KV divisé par 2).
+routing:
+  router:
+    use: group
+    settings:
+      groups:
+        "resident":
+          persistent: true
+          swap: false
+          exclusive: false
+          members:
+            - "qwen3.6"
+            - "gpt-oss-120b"
+
+hooks:
+  on_startup:
+    preload:
+      - "qwen3.6"
+      - "gpt-oss-120b"
